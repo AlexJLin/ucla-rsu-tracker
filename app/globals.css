@@ -73,6 +73,14 @@ a { color: var(--fg); }
 .link { font-size: 12px; color: var(--fg-muted); text-decoration: none; transition: color 0.1s; }
 .link:hover { color: var(--fg); }
 
+/* ── Timeslot link in meta bar ── */
+.ts-link {
+  background: none; border: none; color: #5090e0; font-size: 13px;
+  cursor: pointer; font-family: inherit; padding: 0;
+  transition: color 0.1s;
+}
+.ts-link:hover { color: #70b0ff; }
+
 /* ── Meta bar ── */
 .meta-bar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -101,16 +109,12 @@ a { color: var(--fg); }
 }
 .pill-row { display: flex; gap: 4px; flex-wrap: wrap; }
 
-/* Fix #2: On desktop, buildings just wrap — no scrollbar */
-.pill-wrap-desktop { flex-wrap: wrap; }
-
-/* Fix #3: On mobile (<640px), buildings and room types get horizontal scroll */
+/* Fix #1: On mobile, building and room type pills scroll vertically */
 @media (max-width: 640px) {
   .pill-scroll-mobile {
-    flex-wrap: nowrap;
-    overflow-x: auto;
+    max-height: 72px;
+    overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    padding-bottom: 4px;
   }
 }
 
@@ -138,8 +142,6 @@ th {
 th.sortable { cursor: pointer; user-select: none; transition: color 0.1s; }
 th.sortable.active { color: #888; }
 th.r, td.r { text-align: right; }
-.si { font-size: 10px; opacity: 0.3; margin-left: 2px; }
-.si.active { opacity: 1; }
 
 td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid var(--border-light); }
 .drow { cursor: pointer; transition: background 0.1s; }
@@ -182,7 +184,6 @@ td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid var(--border-l
   width: 100%; max-width: 720px; max-height: 90vh; overflow: auto;
   padding: 24px;
 }
-.modal-narrow { max-width: 400px; }
 .modal-top {
   display: flex; justify-content: space-between; align-items: flex-start;
   margin-bottom: 18px;
@@ -211,27 +212,35 @@ td { padding: 9px 14px; font-size: 13px; border-bottom: 1px solid var(--border-l
   padding: 8px 12px; margin-bottom: 12px;
 }
 
-/* ── Admin modal ── */
-.label { display: block; font-size: 12px; font-weight: 600; color: var(--fg-muted); margin-bottom: 4px; }
-.input {
-  display: block; width: 100%; padding: 7px 11px; border-radius: 3px;
-  border: 1px solid #2a2a2a; font-size: 13px; font-family: inherit;
-  outline: none; background: var(--bg); color: var(--fg);
-  transition: border-color 0.15s;
+/* ── Timeslot Modal ── */
+.ts-subtitle {
+  font-size: 13px; color: var(--fg-muted); margin-bottom: 16px;
 }
-.input:focus { border-color: #3a3a3a; }
-.file-pick {
-  display: block; width: 100%; padding: 16px;
-  border: 1px dashed #333; border-radius: var(--radius);
-  text-align: center; font-size: 13px; color: #666;
-  cursor: pointer; background: #141414; font-family: inherit;
-  margin-bottom: 12px; transition: border-color 0.15s;
+.ts-list {
+  display: flex; flex-direction: column; gap: 10px;
 }
-.file-pick:hover { border-color: #555; }
-.err { font-size: 12px; color: #e05050; margin-bottom: 8px; }
-.ok { font-size: 12px; color: #60b060; margin-bottom: 8px; }
-.btn-pair { display: flex; gap: 8px; margin-top: 12px; }
-.btn-pair .btn { flex: 1; justify-content: center; }
+.ts-item {
+  background: #141414; border: 1px solid #222; border-radius: 4px;
+  padding: 12px 14px;
+}
+.ts-header {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 4px;
+}
+.ts-group {
+  font-size: 11px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.4px; color: #5090e0;
+}
+.ts-time {
+  font-size: 12px; color: var(--fg-strong); font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.ts-label {
+  font-size: 14px; font-weight: 500; color: #ddd; margin-bottom: 3px;
+}
+.ts-desc {
+  font-size: 12px; color: var(--fg-muted); line-height: 1.5;
+}
 
 .center { display: flex; align-items: center; justify-content: center; }
 

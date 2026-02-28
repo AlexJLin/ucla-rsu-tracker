@@ -1,0 +1,44 @@
+name: Fetch Housing Data
+
+on:
+  # Run every hour during RSU week
+  schedule:
+    - cron: '0 * * * *'  # Every hour on the hour
+  # Allow manual trigger
+  workflow_dispatch:
+
+jobs:
+  fetch-data:
+    runs-on: ubuntu-latest
+
+    # Only run during RSU week (March 2-6, 2026) or on manual trigger
+    # Remove or adjust the date check if you want it to run at other times
+    
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Fetch and parse CSV
+        run: node scripts/fetch-snapshot.mjs
+
+      - name: Check for changes
+        id: changes
+        run: |
+          git diff --quiet data/housing.json || echo "changed=true" >> $GITHUB_OUTPUT
+
+      - name: Commit and push
+        if: steps.changes.outputs.changed == 'true'
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add data/housing.json
+          git commit -m "Update housing data $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git push

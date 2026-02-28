@@ -18,20 +18,15 @@ const GC: Record<string, string> = {
   Female: "#e06080", Male: "#5090e0", "Gender Inclusive": "#a080e0", "Non-Binary": "#d0a050", total: "#999",
 };
 
-// Fix #5: enforce gender display order
 const GENDER_ORDER = ["Female", "Male", "Gender Inclusive", "Non-Binary"];
 function sortGenders(genders: string[]): string[] {
   return genders.sort((a, b) => {
     const ai = GENDER_ORDER.indexOf(a);
     const bi = GENDER_ORDER.indexOf(b);
-    if (ai === -1 && bi === -1) return a.localeCompare(b);
-    if (ai === -1) return 1;
-    if (bi === -1) return -1;
-    return ai - bi;
+    return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
   });
 }
 
-// Fix #1: proportional color — takes current and initial for the *filtered* view
 const bedColor = (current: number, initial: number) => {
   if (current === 0) return "#e05050";
   if (initial <= 0) return "#60b060";
@@ -50,11 +45,44 @@ const changeColor = (n: number | null) => {
   return "#50b050";
 };
 
-// Fix #6: date format M/D H:MM instead of day-of-week
 const fmt = (ts: string) => {
   const d = new Date(ts);
   return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
 };
+
+/* ── RSU Timeslot data ── */
+const RSU_GROUPS = [
+  {
+    group: 1,
+    label: "Special allocation groups",
+    desc: "Bruin Guardian Scholars, McKinney-Vento Scholars, Regent Scholars, Veterans, Student Athletes, select CAE students, and limited academic priority groups",
+    time: "3/2/26 9:00 AM",
+  },
+  {
+    group: 2,
+    label: "Housing & Hospitality student staff",
+    desc: "Dining staff and similar positions",
+    time: "3/2/26 11:20 AM",
+  },
+  {
+    group: 3,
+    label: "4th-year & 2nd-year transfer students",
+    desc: "Fourth-year and second-year transfer students for 2026–2027",
+    time: "3/2/26 1:00 PM",
+  },
+  {
+    group: 4,
+    label: "3rd-year students",
+    desc: "Third-year students for 2026–2027",
+    time: "3/3/26 2:00 PM",
+  },
+  {
+    group: 5,
+    label: "2nd-year students",
+    desc: "Second-year students for 2026–2027",
+    time: "3/4/26 2:00 PM",
+  },
+];
 
 /* ── Pill ── */
 
@@ -63,6 +91,34 @@ function Pill({ label, active, onClick, color }: { label: string; active: boolea
     <button onClick={onClick} className={`pill ${active ? "on" : ""}`} style={active && color ? {
       background: `${color}20`, borderColor: color, color: color,
     } : undefined}>{label}</button>
+  );
+}
+
+/* ── Timeslot Modal ── */
+
+function TimeslotModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 540 }} onClick={(e) => e.stopPropagation()}>
+        <div className="modal-top">
+          <h2>RSU Timeslots</h2>
+          <button className="close" onClick={onClose}>×</button>
+        </div>
+        <p className="ts-subtitle">Room Sign Up priority groups · March 2–6, 2026</p>
+        <div className="ts-list">
+          {RSU_GROUPS.map((g) => (
+            <div key={g.group} className="ts-item">
+              <div className="ts-header">
+                <span className="ts-group">Group {g.group}</span>
+                <span className="ts-time">{g.time}</span>
+              </div>
+              <div className="ts-label">{g.label}</div>
+              <div className="ts-desc">{g.desc}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -119,7 +175,7 @@ function TrendModal({ snapshots, rowKey, onClose }: { snapshots: Snapshot[]; row
         </div>
 
         {chartData.length <= 1 && (
-          <p className="notice">Upload multiple snapshots over time to see the trend chart.</p>
+          <p className="notice">Data will update automatically during RSU. Check back for trend charts.</p>
         )}
 
         <div className="pill-row" style={{ marginBottom: 14 }}>
@@ -145,56 +201,6 @@ function TrendModal({ snapshots, rowKey, onClose }: { snapshots: Snapshot[]; row
   );
 }
 
-/* ── Admin Upload Modal ── */
-
-function AdminModal({ onClose, onSuccess }: { onClose: () => void; onSuccess: () => void }) {
-  const [password, setPassword] = useState("");
-  const [file, setFile] = useState<File | null>(null);
-  const [status, setStatus] = useState<"idle" | "uploading" | "success" | "error">("idle");
-  const [message, setMessage] = useState("");
-
-  const handleUpload = async () => {
-    if (!password || !file) return;
-    setStatus("uploading");
-    setMessage("");
-    const fd = new FormData();
-    fd.append("file", file);
-    try {
-      const res = await fetch("/api/upload", { method: "POST", headers: { "x-admin-password": password }, body: fd });
-      const data = await res.json();
-      if (!res.ok) { setStatus("error"); setMessage(data.error || "Failed."); return; }
-      setStatus("success");
-      setMessage(`${data.rowsImported} rows imported.`);
-      setTimeout(() => { onSuccess(); onClose(); }, 1000);
-    } catch (err: any) { setStatus("error"); setMessage(err.message); }
-  };
-
-  return (
-    <div className="overlay" onClick={onClose}>
-      <div className="modal modal-narrow" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-top">
-          <h2>Upload CSV</h2>
-          <button className="close" onClick={onClose}>×</button>
-        </div>
-        <label className="label">Password</label>
-        <input type="password" className="input" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Admin password" />
-        <label className="label" style={{ marginTop: 12 }}>File</label>
-        <button className="file-pick" onClick={() => document.getElementById("admin-file")?.click()}>
-          {file ? file.name : "Choose .csv file…"}
-        </button>
-        <input id="admin-file" type="file" accept=".csv,.tsv,.txt" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ display: "none" }} />
-        {message && <p className={status === "error" ? "err" : "ok"}>{message}</p>}
-        <div className="btn-pair">
-          <button className="btn sec" onClick={onClose}>Cancel</button>
-          <button className="btn pri" disabled={!password || !file || status === "uploading"} onClick={handleUpload}>
-            {status === "uploading" ? "Uploading…" : "Upload"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 /* ── Page ── */
 
 export default function Home() {
@@ -207,7 +213,7 @@ export default function Home() {
   const [selected, setSelected] = useState<string | null>(null);
   const [sortF, setSortF] = useState<"building" | "roomType" | "bedSpaces" | "change">("bedSpaces");
   const [sortD, setSortD] = useState<"asc" | "desc">("desc");
-  const [admin, setAdmin] = useState(false);
+  const [showTimeslots, setShowTimeslots] = useState(false);
 
   const load = useCallback(async () => {
     try { const r = await fetch("/api/data"); setData(await r.json()); } catch {} finally { setLoading(false); }
@@ -217,13 +223,11 @@ export default function Home() {
   const latest = useMemo(() => data.snapshots.length ? data.snapshots[data.snapshots.length - 1].rows : [], [data]);
   const prev = useMemo(() => data.snapshots.length > 1 ? data.snapshots[data.snapshots.length - 2].rows : null, [data]);
 
-  // Fix #1: compute initial totals respecting current gender filter
   const initialTotals = useMemo(() => {
     if (data.snapshots.length === 0) return {} as Record<string, number>;
     const first = data.snapshots[0].rows;
     const totals: Record<string, number> = {};
     for (const r of first) {
-      // Apply the same gender filter as the main table
       if (gender !== "All" && r.gender !== gender) continue;
       const k = JSON.stringify({ building: r.building, roomType: r.roomType });
       totals[k] = (totals[k] || 0) + r.bedSpaces;
@@ -231,12 +235,10 @@ export default function Home() {
     return totals;
   }, [data, gender]);
 
-  // Fix #5: sorted genders
   const genders = useMemo(() => ["All", ...sortGenders([...new Set(latest.map((r) => r.gender))])], [latest]);
   const buildings = useMemo(() => ["All", ...new Set(latest.map((r) => r.building))], [latest]);
   const roomTypes = useMemo(() => ["All", ...new Set(latest.map((r) => r.roomType))], [latest]);
 
-  // Fix #7: compute previous snapshot totals for change column
   const prevTotals = useMemo(() => {
     if (!prev) return null;
     let f = prev;
@@ -265,7 +267,6 @@ export default function Home() {
       g[k].totalBeds += r.bedSpaces;
       g[k].byGender[r.gender] = (g[k].byGender[r.gender] || 0) + r.bedSpaces;
     }
-    // Compute change from previous snapshot
     for (const row of Object.values(g)) {
       if (prevTotals && row.key in prevTotals) {
         row.change = row.totalBeds - prevTotals[row.key];
@@ -306,7 +307,7 @@ export default function Home() {
             <p className="sub">Room Sign Up · March 2–6, 2026</p>
           </div>
           <div className="header-actions">
-            <button className="btn sec sm" onClick={() => setAdmin(true)}>Upload CSV</button>
+            <button className="btn sec sm" onClick={() => setShowTimeslots(true)}>View Timeslots</button>
             <a href="https://ucla.app.box.com/s/0lsmybss0m99921jly29lqvgshyr74sb" target="_blank" rel="noopener noreferrer" className="link">Source ↗</a>
           </div>
         </div>
@@ -316,11 +317,11 @@ export default function Home() {
         {!latest.length ? (
           <div className="empty-state">
             <h2>No data yet</h2>
-            <p>Download the CSV from the{" "}
+            <p>Data will be fetched automatically from the{" "}
               <a href="https://ucla.app.box.com/s/0lsmybss0m99921jly29lqvgshyr74sb" target="_blank" rel="noopener noreferrer">UCLA Housing spreadsheet</a>
-              , then upload it here. Upload new snapshots hourly during RSU to track fill rates.
+              {" "}during RSU week. Check back starting March 2.
             </p>
-            <button className="btn pri" style={{ marginTop: 16 }} onClick={() => setAdmin(true)}>Upload first snapshot</button>
+            <button className="btn sec" style={{ marginTop: 16 }} onClick={() => setShowTimeslots(true)}>View Timeslots</button>
           </div>
         ) : (
           <>
@@ -335,6 +336,8 @@ export default function Home() {
                 <span className="dot">·</span>
                 <span style={{ color: "#444" }}>Updated {new Date(data.lastUpdated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
               </>}
+              <span className="dot">·</span>
+              <button className="ts-link" onClick={() => setShowTimeslots(true)}>View Timeslots</button>
             </div>
 
             {/* Filters */}
@@ -351,7 +354,7 @@ export default function Home() {
               </div>
               <div className="fg">
                 <span className="fl">Building</span>
-                <div className="pill-row pill-wrap-desktop pill-scroll-mobile">
+                <div className="pill-row pill-scroll-mobile">
                   {(buildings as string[]).map((o) => (
                     <Pill key={o} label={o} active={building === o} onClick={() => setBuilding(o)} />
                   ))}
@@ -422,7 +425,7 @@ export default function Home() {
       </main>
 
       {selected && <TrendModal snapshots={data.snapshots} rowKey={selected} onClose={() => setSelected(null)} />}
-      {admin && <AdminModal onClose={() => setAdmin(false)} onSuccess={load} />}
+      {showTimeslots && <TimeslotModal onClose={() => setShowTimeslots(false)} />}
     </div>
   );
 }

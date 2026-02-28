@@ -3,10 +3,7 @@ import { NextResponse } from "next/server";
 import { readFileSync, existsSync } from "fs";
 import { join } from "path";
 
-// Use /tmp on Vercel (only writable directory in serverless), cwd/data locally
-const DATA_PATH = process.env.VERCEL
-  ? join("/tmp", "housing.json")
-  : join(process.cwd(), "data", "housing.json");
+const DATA_PATH = join(process.cwd(), "data", "housing.json");
 
 export const dynamic = "force-dynamic";
 

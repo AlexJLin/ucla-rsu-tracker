@@ -1,90 +1,65 @@
-# UCLA RSU Housing Tracker — Deployment Guide
+# UCLA RSU Housing Tracker — Deploy Guide
 
-## Quickest Option: Vercel (Free, ~15 min)
+## Architecture
 
-This is the recommended approach. You'll get a live URL like `ucla-housing.vercel.app`.
+Data is stored in `data/housing.json` in the git repo. A GitHub Action runs hourly, fetches the UCLA Housing CSV from Box, parses it, appends a new snapshot to the JSON file, and commits. Each commit triggers an automatic Vercel redeploy, so the site stays up to date with zero manual effort.
 
-### What you need
-- A free [Vercel](https://vercel.com) account (sign up with GitHub)
-- A free [GitHub](https://github.com) account
-- Node.js installed on your computer ([download here](https://nodejs.org))
+## Setup
 
-### Step-by-step
+### 1. Install and test locally
 
 ```bash
-# 1. Create the project on your computer
-npx create-next-app@latest ucla-housing --typescript --tailwind --app --no-src-dir
-cd ucla-housing
-
-# 2. Replace the files with the ones I've provided (see below)
-
-# 3. Install dependencies
-npm install papaparse recharts
-
-# 4. Test locally
+unzip ucla-rsu-tracker.zip -d ucla-rsu-tracker
+cd ucla-rsu-tracker
+npm install
 npm run dev
-# Open http://localhost:3000 in your browser
-
-# 5. Deploy
-npx vercel
-# Follow the prompts, link to your Vercel account
-# You'll get a live URL instantly
+# Open http://localhost:3000
 ```
 
-### How the admin password works
-- The app has an "Admin Upload" button
-- Clicking it prompts for a password
-- Only the correct password lets you upload a new CSV
-- Regular visitors can only view/filter the data
-- Set your password as an **environment variable** in Vercel:
-  - Go to your Vercel dashboard → Project → Settings → Environment Variables
-  - Add: `ADMIN_PASSWORD` = `your-secret-password-here`
+### 2. Push to GitHub
 
----
-
-## Alternative: Netlify (also free)
-
-Same idea, slightly different deploy command:
 ```bash
-npm run build
-npx netlify deploy --prod --dir=.next
+git init
+git add .
+git commit -m "initial commit"
+git branch -M main
+git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPO.git
+git push -u origin main
 ```
 
-## Alternative: Railway / Render (free tier)
+### 3. Connect to Vercel
 
-Good if you want a traditional server. Same code works.
+1. Go to [vercel.com](https://vercel.com) → **Add New Project**
+2. Import your GitHub repo
+3. Deploy — you'll get a live URL
 
----
+### 4. Enable the GitHub Action
 
-## File Structure
+The Action at `.github/workflows/fetch-data.yml` runs every hour automatically. It needs write access to push commits:
 
-After running `create-next-app`, replace/create these files:
+1. Go to your GitHub repo → **Settings** → **Actions** → **General**
+2. Under "Workflow permissions", select **Read and write permissions**
+3. Save
 
-```
-ucla-housing/
-├── app/
-│   ├── layout.tsx          (keep default)
-│   ├── page.tsx            ← replace with provided file
-│   ├── globals.css         ← replace with provided file
-│   └── api/
-│       ├── data/
-│       │   └── route.ts    ← create this (API endpoint)
-│       └── upload/
-│           └── route.ts    ← create this (admin upload endpoint)
-├── data/
-│   └── housing.json        ← create this (data storage)
-├── package.json
-└── .env.local              ← create this (password)
-```
+### 5. Test the Action
 
-## Setting Your Admin Password
+1. Go to **Actions** tab in your repo
+2. Click **Fetch Housing Data** → **Run workflow**
+3. Watch it fetch the CSV and commit `data/housing.json`
+4. Vercel will auto-redeploy
 
-Create a `.env.local` file in the project root:
+## How it works
 
-```
-ADMIN_PASSWORD=your-secret-password-here
-```
+- **GitHub Action** fetches the CSV from UCLA's Box link every hour
+- Parses building, room type, gender, bed spaces, and the "Last Updated" timestamp
+- Appends a snapshot to `data/housing.json` and commits
+- **Vercel** auto-deploys on each push
+- The site reads `data/housing.json` and renders the table, filters, and trend charts
+- Duplicate snapshots (same "Last Updated" timestamp) are automatically skipped
 
-**Never commit this file to GitHub.** It's already in `.gitignore` by default.
+## Important notes
 
-On Vercel, add this same variable in Settings → Environment Variables.
+- The Box URL may require the file to be publicly shared. If the Action fails to fetch, check that the link is still active.
+- You can also manually run the Action anytime from the Actions tab.
+- The `data/housing.json` file will grow over RSU week as snapshots accumulate. This is fine — even 100+ snapshots is small.
+- To reset data, delete the contents of `data/housing.json` (set it to `{"snapshots":[],"lastUpdated":null}`), commit, and push.
