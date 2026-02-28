@@ -53,8 +53,16 @@ function parseLastUpdated(raw) {
   let h = parseInt(hour);
   if (suffix.includes("PM") && h < 12) h += 12;
   if (suffix.includes("AM") && h === 12) h = 0;
-  const d = new Date(parseInt(year), parseInt(month) - 1, parseInt(day), h, parseInt(minute));
-  return isNaN(d.getTime()) ? null : d.toISOString();
+  const mm = String(parseInt(month)).padStart(2, "0");
+  const dd = String(parseInt(day)).padStart(2, "0");
+  const hh = String(h).padStart(2, "0");
+  const mi = String(parseInt(minute)).padStart(2, "0");
+  // 2026 DST starts March 8 — before that is PST (UTC-8), after is PDT (UTC-7)
+  const m = parseInt(month);
+  const d = parseInt(day);
+  const isPDT = m > 3 || (m === 3 && d >= 8);
+  const offset = isPDT ? "-07:00" : "-08:00";
+  return `${year}-${mm}-${dd}T${hh}:${mi}:00${offset}`;
 }
 
 function parseCSV(text) {
