@@ -45,9 +45,17 @@ const changeColor = (n: number | null) => {
   return "#50b050";
 };
 
-const fmt = (ts: string) => {
+// Full date+time for tooltip hover
+const fmtTooltip = (ts: string) => {
   const d = new Date(ts);
-  return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+  const dn = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+  return `${dn[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
+
+// X-axis tick: only show day label, hide time to avoid clutter
+const fmtTick = (ts: string) => {
+  const d = new Date(ts);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
 };
 
 /* ── RSU Timeslot data ── */
@@ -186,9 +194,17 @@ function TrendModal({ snapshots, rowKey, onClose }: { snapshots: Snapshot[]; row
         <div style={{ width: "100%", height: 250 }}>
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 4, right: 12, bottom: 4, left: 0 }}>
-              <XAxis dataKey="timestamp" tickFormatter={fmt} tick={{ fontSize: 11, fill: "#444" }} axisLine={{ stroke: "#252525" }} tickLine={false} interval="preserveStartEnd" />
+              <XAxis
+                dataKey="timestamp"
+                tickFormatter={fmtTick}
+                tick={{ fontSize: 11, fill: "#444" }}
+                axisLine={{ stroke: "#252525" }}
+                tickLine={false}
+                interval="preserveStartEnd"
+                minTickGap={60}
+              />
               <YAxis tick={{ fontSize: 11, fill: "#444" }} axisLine={false} tickLine={false} width={32} />
-              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 3, border: "1px solid #333", background: "#1a1a1a", color: "#ccc" }} labelStyle={{ color: "#555" }} labelFormatter={fmt} />
+              <Tooltip contentStyle={{ fontSize: 12, borderRadius: 3, border: "1px solid #333", background: "#1a1a1a", color: "#ccc" }} labelStyle={{ color: "#666" }} labelFormatter={fmtTooltip} />
               {gf === "All"
                 ? genders.map((g) => <Line key={g} type="monotone" dataKey={g} stroke={GC[g] || "#888"} strokeWidth={1.5} dot={false} name={g} />)
                 : <Line type="monotone" dataKey="total" stroke={GC[gf] || "#999"} strokeWidth={2} dot={false} name={gf} />}
@@ -307,7 +323,6 @@ export default function Home() {
             <p className="sub">Room Sign Up · March 2–6, 2026</p>
           </div>
           <div className="header-actions">
-            <button className="btn sec sm" onClick={() => setShowTimeslots(true)}>View Timeslots</button>
             <a href="https://ucla.app.box.com/s/0lsmybss0m99921jly29lqvgshyr74sb" target="_blank" rel="noopener noreferrer" className="link">Source ↗</a>
           </div>
         </div>
@@ -327,16 +342,16 @@ export default function Home() {
           <>
             {/* Meta bar */}
             <div className="meta-bar">
-              <span><strong>{totalBeds.toLocaleString()}</strong> beds</span>
+              <span><strong>{totalBeds.toLocaleString()}</strong> beds available</span>
               <span className="dot">·</span>
               <span>{new Set(table.map((r) => r.building)).size} buildings</span>
               <span className="dot">·</span>
               <span>{data.snapshots.length} snapshot{data.snapshots.length !== 1 ? "s" : ""}</span>
               {data.lastUpdated && <>
                 <span className="dot">·</span>
-                <span style={{ color: "#444" }}>Updated {new Date(data.lastUpdated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                <span style={{ color: "#444" }}>Last Update: {new Date(data.lastUpdated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
               </>}
-              <span className="dot">·</span>
+              <span className="meta-spacer" />
               <button className="ts-link" onClick={() => setShowTimeslots(true)}>View Timeslots</button>
             </div>
 

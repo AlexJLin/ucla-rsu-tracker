@@ -87,6 +87,7 @@ a { color: var(--fg); }
   font-size: 13px; color: var(--fg-muted); margin-bottom: 16px;
 }
 .meta-bar strong { color: var(--fg-strong); font-size: 14px; }
+.meta-spacer { flex: 1; }
 .dot { color: #2a2a2a; }
 
 /* ── Filters ── */
