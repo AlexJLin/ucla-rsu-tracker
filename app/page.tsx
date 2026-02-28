@@ -45,17 +45,19 @@ const changeColor = (n: number | null) => {
   return "#50b050";
 };
 
-// Full date+time for tooltip hover
-const fmtTooltip = (ts: string) => {
-  const d = new Date(ts);
-  const dn = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-  return `${dn[d.getDay()]} ${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`;
+// Format timestamp in Pacific time
+const fmtPacific = (ts: string, opts: Intl.DateTimeFormatOptions) => {
+  return new Date(ts).toLocaleString("en-US", { ...opts, timeZone: "America/Los_Angeles" });
 };
 
-// X-axis tick: only show day label, hide time to avoid clutter
+// Full date+time for tooltip hover
+const fmtTooltip = (ts: string) => {
+  return fmtPacific(ts, { weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
+};
+
+// X-axis tick: only show day label
 const fmtTick = (ts: string) => {
-  const d = new Date(ts);
-  return `${d.getMonth() + 1}/${d.getDate()}`;
+  return fmtPacific(ts, { month: "numeric", day: "numeric" });
 };
 
 /* ── RSU Timeslot data ── */
@@ -112,7 +114,6 @@ function TimeslotModal({ onClose }: { onClose: () => void }) {
           <h2>RSU Timeslots</h2>
           <button className="close" onClick={onClose}>×</button>
         </div>
-        <p className="ts-subtitle">Room Sign Up priority groups · March 2–6, 2026</p>
         <div className="ts-list">
           {RSU_GROUPS.map((g) => (
             <div key={g.group} className="ts-item">
@@ -349,7 +350,7 @@ export default function Home() {
               <span>{data.snapshots.length} snapshot{data.snapshots.length !== 1 ? "s" : ""}</span>
               {data.lastUpdated && <>
                 <span className="dot">·</span>
-                <span style={{ color: "#444" }}>Last Update: {new Date(data.lastUpdated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</span>
+                <span style={{ color: "#444" }}>Last Update: {new Date(data.lastUpdated).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit", timeZone: "America/Los_Angeles" })}</span>
               </>}
               <span className="meta-spacer" />
               <button className="ts-link" onClick={() => setShowTimeslots(true)}>View Timeslots</button>
