@@ -63,7 +63,7 @@ const RSU_GROUPS = [
   {
     group: 1,
     label: "Special allocation groups",
-    desc: "Bruin Guardian Scholars, McKinney-Vento Scholars, Regent Scholars, Veterans, Student Athletes, select CAE students, and limited academic priority groups",
+    desc: "Bruin Guardian Scholars, McKinney-Vento Scholars, Regent Scholars, veterans, student athletes, select CAE students, and limited academic priority groups",
     time: "3/2/26 9:00 AM",
   },
   {
@@ -391,7 +391,7 @@ export default function Home() {
                 <table>
                   <thead>
                     <tr>
-                      {([["building","Building","left"],["roomType","Room type","left"],["bedSpaces","Beds","right"],["change","Change","right"]] as const).map(([k,l,a]) => (
+                      {([["building","Building","left"],["roomType","Room type","left"],["bedSpaces","Beds","right"],["change","Δ","right"]] as const).map(([k,l,a]) => (
                         <th key={k} className={`sortable ${sortF === k ? "active" : ""} ${a === "right" ? "r" : ""}`} onClick={() => doSort(k as any)}>
                           {l}{si(k)}
                         </th>
