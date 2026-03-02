@@ -29,16 +29,21 @@ function sortGenders(genders: string[]): string[] {
 
 // Room type display order — partial match, earlier = higher priority
 const ROOM_TYPE_ORDER = [
-  "classic triple", "deluxe triple", "triple",
-  "classic double", "deluxe double", "double",
-  "plaza shared", "plaza private", "plaza triple", "plaza double", "plaza",
-  "suite shared", "suite private", "suite triple", "suite double", "suite",
-  "single",
-  // Apartments
-  "1 bd", "1 bed",
-  "2 bd", "2 bed",
-  "3 bd", "3 bed",
-  "4 bd", "4 bed",
+  "classic triple",
+  "deluxe triple",
+  "plaza triple/shared", "plaza triple shared",
+  "plaza triple/private", "plaza triple private",
+  "suite triple/shared", "suite triple shared",
+  // Apartments by increasing bed count
+  "1 bd/2", "1 bd/3",
+  "2 bd/3", "2 bd/4 person-double", "2 bd/4 person-triple",
+  "2 bd/4 person-townhouse", "2 bd/4 person",
+  "2 bd/5 person-double", "2 bd/5 person-triple", "2 bd/5 person",
+  "2 bd/6", "2 bd/7 person-triple", "2 bd/7 person-quad", "2 bd/7 person",
+  "2 bd+loft/5", "2 bd+loft/6", "2 bd+loft/9",
+  "3 bd/5", "3 bd/6", "3 bd/8",
+  "3 bd+loft/9",
+  "4 bd/8",
   "studio",
 ];
 
@@ -46,11 +51,18 @@ function sortRoomTypes(types: string[]): string[] {
   return [...types].sort((a, b) => {
     const al = a.toLowerCase();
     const bl = b.toLowerCase();
-    let ai = ROOM_TYPE_ORDER.findIndex((p) => al.includes(p));
-    let bi = ROOM_TYPE_ORDER.findIndex((p) => bl.includes(p));
+    // Try exact match first, then partial
+    let ai = ROOM_TYPE_ORDER.findIndex((p) => al === p);
+    let bi = ROOM_TYPE_ORDER.findIndex((p) => bl === p);
+    if (ai === -1) ai = ROOM_TYPE_ORDER.findIndex((p) => al.includes(p));
+    if (bi === -1) bi = ROOM_TYPE_ORDER.findIndex((p) => bl.includes(p));
     if (ai === -1) ai = 999;
     if (bi === -1) bi = 999;
     if (ai !== bi) return ai - bi;
+    // Tiebreaker: extract total person count
+    const numA = al.match(/(\d+)\s*person/)?.[1];
+    const numB = bl.match(/(\d+)\s*person/)?.[1];
+    if (numA && numB) return parseInt(numA) - parseInt(numB);
     return a.localeCompare(b);
   });
 }
