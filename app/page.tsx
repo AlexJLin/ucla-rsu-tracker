@@ -20,10 +20,38 @@ const GC: Record<string, string> = {
 
 const GENDER_ORDER = ["Female", "Male", "Gender Inclusive", "Non-Binary"];
 function sortGenders(genders: string[]): string[] {
-  return genders.sort((a, b) => {
+  return [...genders].sort((a, b) => {
     const ai = GENDER_ORDER.indexOf(a);
     const bi = GENDER_ORDER.indexOf(b);
     return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi);
+  });
+}
+
+// Room type display order — partial match, earlier = higher priority
+const ROOM_TYPE_ORDER = [
+  "classic triple", "deluxe triple", "triple",
+  "classic double", "deluxe double", "double",
+  "plaza shared", "plaza private", "plaza triple", "plaza double", "plaza",
+  "suite shared", "suite private", "suite triple", "suite double", "suite",
+  "single",
+  // Apartments
+  "1 bd", "1 bed",
+  "2 bd", "2 bed",
+  "3 bd", "3 bed",
+  "4 bd", "4 bed",
+  "studio",
+];
+
+function sortRoomTypes(types: string[]): string[] {
+  return [...types].sort((a, b) => {
+    const al = a.toLowerCase();
+    const bl = b.toLowerCase();
+    let ai = ROOM_TYPE_ORDER.findIndex((p) => al.includes(p));
+    let bi = ROOM_TYPE_ORDER.findIndex((p) => bl.includes(p));
+    if (ai === -1) ai = 999;
+    if (bi === -1) bi = 999;
+    if (ai !== bi) return ai - bi;
+    return a.localeCompare(b);
   });
 }
 
@@ -45,17 +73,14 @@ const changeColor = (n: number | null) => {
   return "#50b050";
 };
 
-// Format timestamp in Pacific time
 const fmtPacific = (ts: string, opts: Intl.DateTimeFormatOptions) => {
   return new Date(ts).toLocaleString("en-US", { ...opts, timeZone: "America/Los_Angeles" });
 };
 
-// Full date+time for tooltip hover
 const fmtTooltip = (ts: string) => {
   return fmtPacific(ts, { weekday: "short", month: "numeric", day: "numeric", hour: "numeric", minute: "2-digit" });
 };
 
-// X-axis tick: only show day label
 const fmtTick = (ts: string) => {
   return fmtPacific(ts, { month: "numeric", day: "numeric" });
 };
@@ -224,13 +249,19 @@ export default function Home() {
   const [data, setData] = useState<HousingData>({ snapshots: [], lastUpdated: null });
   const [loading, setLoading] = useState(true);
   const [gender, setGender] = useState("All");
-  const [building, setBuilding] = useState("All");
-  const [roomType, setRoomType] = useState("All");
+  const [selBuildings, setSelBuildings] = useState<Set<string>>(new Set());
+  const [selRoomTypes, setSelRoomTypes] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [sortF, setSortF] = useState<"building" | "roomType" | "bedSpaces" | "change">("bedSpaces");
   const [sortD, setSortD] = useState<"asc" | "desc">("desc");
   const [showTimeslots, setShowTimeslots] = useState(false);
+
+  const toggleSet = (set: Set<string>, val: string, setter: (s: Set<string>) => void) => {
+    const next = new Set(set);
+    if (next.has(val)) next.delete(val); else next.add(val);
+    setter(next);
+  };
 
   const load = useCallback(async () => {
     try { const r = await fetch("/api/data"); setData(await r.json()); } catch {} finally { setLoading(false); }
@@ -253,30 +284,31 @@ export default function Home() {
   }, [data, gender]);
 
   const genders = useMemo(() => ["All", ...sortGenders([...new Set(latest.map((r) => r.gender))])], [latest]);
-  const buildings = useMemo(() => ["All", ...new Set(latest.map((r) => r.building))], [latest]);
-  const roomTypes = useMemo(() => ["All", ...new Set(latest.map((r) => r.roomType))], [latest]);
+  const buildings = useMemo(() => [...new Set(latest.map((r) => r.building))].sort(), [latest]);
+  const roomTypes = useMemo(() => sortRoomTypes([...new Set(latest.map((r) => r.roomType))]), [latest]);
+
+  const applyFilters = useCallback((rows: Row[]) => {
+    let f = rows;
+    if (gender !== "All") f = f.filter((r) => r.gender === gender);
+    if (selBuildings.size > 0) f = f.filter((r) => selBuildings.has(r.building));
+    if (selRoomTypes.size > 0) f = f.filter((r) => selRoomTypes.has(r.roomType));
+    if (q) { const lq = q.toLowerCase(); f = f.filter((r) => r.building.toLowerCase().includes(lq) || r.roomType.toLowerCase().includes(lq)); }
+    return f;
+  }, [gender, selBuildings, selRoomTypes, q]);
 
   const prevTotals = useMemo(() => {
     if (!prev) return null;
-    let f = prev;
-    if (gender !== "All") f = f.filter((r) => r.gender === gender);
-    if (building !== "All") f = f.filter((r) => r.building === building);
-    if (roomType !== "All") f = f.filter((r) => r.roomType === roomType);
-    if (q) { const lq = q.toLowerCase(); f = f.filter((r) => r.building.toLowerCase().includes(lq) || r.roomType.toLowerCase().includes(lq)); }
+    const f = applyFilters(prev);
     const g: Record<string, number> = {};
     for (const r of f) {
       const k = JSON.stringify({ building: r.building, roomType: r.roomType });
       g[k] = (g[k] || 0) + r.bedSpaces;
     }
     return g;
-  }, [prev, gender, building, roomType, q]);
+  }, [prev, applyFilters]);
 
   const table = useMemo(() => {
-    let f = latest;
-    if (gender !== "All") f = f.filter((r) => r.gender === gender);
-    if (building !== "All") f = f.filter((r) => r.building === building);
-    if (roomType !== "All") f = f.filter((r) => r.roomType === roomType);
-    if (q) { const lq = q.toLowerCase(); f = f.filter((r) => r.building.toLowerCase().includes(lq) || r.roomType.toLowerCase().includes(lq)); }
+    const f = applyFilters(latest);
     const g: Record<string, GroupedRow> = {};
     for (const r of f) {
       const k = JSON.stringify({ building: r.building, roomType: r.roomType });
@@ -302,7 +334,7 @@ export default function Home() {
       return sortD === "asc" ? x.localeCompare(y) : y.localeCompare(x);
     });
     return arr;
-  }, [latest, gender, building, roomType, q, sortF, sortD, prevTotals]);
+  }, [latest, applyFilters, sortF, sortD, prevTotals]);
 
   const doSort = (f: "building" | "roomType" | "bedSpaces" | "change") => {
     if (sortF === f) setSortD((d) => d === "asc" ? "desc" : "asc");
@@ -315,7 +347,6 @@ export default function Home() {
 
   return (
     <div className="page">
-      {/* Header */}
       <header className="header">
         <div className="header-glow" />
         <div className="header-inner">
@@ -341,7 +372,6 @@ export default function Home() {
           </div>
         ) : (
           <>
-            {/* Meta bar */}
             <div className="meta-bar">
               <span><strong>{totalBeds.toLocaleString()}</strong> beds available</span>
               <span className="dot">·</span>
@@ -356,9 +386,9 @@ export default function Home() {
               <button className="ts-link" onClick={() => setShowTimeslots(true)}>View Timeslots</button>
             </div>
 
-            {/* Filters */}
             <div className="filters">
               <input type="text" className="search" placeholder="Search buildings or room types…" value={q} onChange={(e) => setQ(e.target.value)} />
+
               <div className="fg">
                 <span className="fl">Gender</span>
                 <div className="pill-row">
@@ -368,25 +398,28 @@ export default function Home() {
                   ))}
                 </div>
               </div>
+
               <div className="fg">
-                <span className="fl">Building</span>
+                <span className="fl">Building {selBuildings.size > 0 && <span className="filter-count">({selBuildings.size})</span>}</span>
                 <div className="pill-row pill-scroll-mobile">
-                  {(buildings as string[]).map((o) => (
-                    <Pill key={o} label={o} active={building === o} onClick={() => setBuilding(o)} />
+                  <Pill label="All" active={selBuildings.size === 0} onClick={() => setSelBuildings(new Set())} />
+                  {buildings.map((o) => (
+                    <Pill key={o} label={o} active={selBuildings.has(o)} onClick={() => toggleSet(selBuildings, o, setSelBuildings)} />
                   ))}
                 </div>
               </div>
+
               <div className="fg">
-                <span className="fl">Room type</span>
+                <span className="fl">Room type {selRoomTypes.size > 0 && <span className="filter-count">({selRoomTypes.size})</span>}</span>
                 <div className="pill-row pill-scroll-mobile">
-                  {(roomTypes as string[]).map((o) => (
-                    <Pill key={o} label={o} active={roomType === o} onClick={() => setRoomType(o)} />
+                  <Pill label="All" active={selRoomTypes.size === 0} onClick={() => setSelRoomTypes(new Set())} />
+                  {roomTypes.map((o) => (
+                    <Pill key={o} label={o} active={selRoomTypes.has(o)} onClick={() => toggleSet(selRoomTypes, o, setSelRoomTypes)} />
                   ))}
                 </div>
               </div>
             </div>
 
-            {/* Table */}
             <div className="tbl-wrap">
               <div style={{ overflowX: "auto" }}>
                 <table>
