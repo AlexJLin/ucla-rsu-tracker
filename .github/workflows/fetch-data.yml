@@ -40,5 +40,5 @@ jobs:
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git add data/housing.json
-          git commit -m "Update housing data $(date -u +'%Y-%m-%d %H:%M UTC')"
+          git commit -m "update housing data $(date -u +'%Y-%m-%d %H:%M UTC')"
           git push
