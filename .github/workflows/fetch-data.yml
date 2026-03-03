@@ -3,7 +3,7 @@ name: Fetch Housing Data
 on:
   # Run every hour during RSU week
   schedule:
-    - cron: "7,23,58 * * * *"
+    - cron: "*/20 * * * *"
   # Allow manual trigger
   workflow_dispatch:
 
