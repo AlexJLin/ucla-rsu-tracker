@@ -7,40 +7,146 @@ import { fileURLToPath } from "url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DATA_PATH = join(__dirname, "..", "data", "housing.json");
-const BOX_URL = "https://ucla.app.box.com/shared/static/0lsmybss0m99921jly29lqvgshyr74sb";
+const SHARED_NAME = "0lsmybss0m99921jly29lqvgshyr74sb";
 
-// Box shared links redirect to a direct download URL — we need to follow redirects
-// The direct download URL pattern for Box is:
-// https://ucla.app.box.com/s/XXXXX → download via the API
+function looksLikeCSV(text) {
+  if (!text || text.length < 50) return false;
+  if (!text.includes(",")) return false;
+  const lines = text.trim().split("\n");
+  if (lines.length < 3) return false;
+  const first = lines[0].trim();
+  if (first.startsWith("<") || first.startsWith("{") || first.startsWith("!")) return false;
+  return (first.match(/,/g) || []).length >= 2;
+}
 
 async function fetchCSV() {
-  // Try the direct download endpoint
   const urls = [
-    "https://ucla.app.box.com/shared/static/0lsmybss0m99921jly29lqvgshyr74sb",
-    "https://ucla.app.box.com/index.php?rm=box_download_shared_file&shared_name=0lsmybss0m99921jly29lqvgshyr74sb&file_id=f_0",
+    `https://ucla.app.box.com/shared/static/${SHARED_NAME}`,
+    `https://ucla.app.box.com/index.php?rm=box_download_shared_file&shared_name=${SHARED_NAME}&file_id=f_0`,
   ];
 
   for (const url of urls) {
     try {
+      console.log(`Trying: ${url.substring(0, 80)}...`);
       const res = await fetch(url, {
         redirect: "follow",
-        headers: {
-          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
+        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
       });
-      if (res.ok) {
-        const text = await res.text();
-        // Verify it looks like CSV (has commas and multiple lines)
-        if (text.includes(",") && text.split("\n").length > 2) {
-          return text;
-        }
-      }
+      console.log(`  Status: ${res.status}, Content-Type: ${res.headers.get("content-type")}`);
+      if (!res.ok) continue;
+      const text = await res.text();
+      console.log(`  Got ${text.length} bytes, first 100: ${text.substring(0, 100).replace(/\n/g, "\\n")}`);
+      if (looksLikeCSV(text)) return text;
+      console.log("  Not CSV");
     } catch (e) {
-      console.log(`Failed to fetch from ${url}: ${e.message}`);
+      console.log(`  Error: ${e.message}`);
     }
   }
 
-  throw new Error("Could not fetch CSV from any Box URL. The file may require authentication or the link may have changed.");
+  // Strategy: fetch the shared link page HTML to extract file ID
+  console.log("Trying HTML page scrape for file ID...");
+  try {
+    const pageRes = await fetch(`https://ucla.app.box.com/s/${SHARED_NAME}`, {
+      redirect: "follow",
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept": "text/html",
+      },
+    });
+    console.log(`  Page status: ${pageRes.status}`);
+    if (pageRes.ok) {
+      const html = await pageRes.text();
+      console.log(`  Page size: ${html.length}`);
+
+      // Look for file ID patterns in Box's HTML/JS
+      const patterns = [
+        [/\"itemID\"\s*:\s*\"(\d+)\"/, "itemID"],
+        [/\"file_id\"\s*:\s*\"(\d+)\"/, "file_id"],
+        [/typedID\"\s*:\s*\"f_(\d+)\"/, "typedID"],
+        [/\"itemTypedID\"\s*:\s*\"f_(\d+)\"/, "itemTypedID"],
+        [/\/file\/(\d+)/, "/file/"],
+        [/\"id\"\s*:\s*\"?(\d{8,})"?/, "long id"],
+      ];
+
+      let fileId = null;
+      for (const [pat, name] of patterns) {
+        const m = html.match(pat);
+        if (m) {
+          fileId = m[1];
+          console.log(`  Found file ID via ${name}: ${fileId}`);
+          break;
+        }
+      }
+
+      if (fileId) {
+        const dlUrl = `https://ucla.app.box.com/index.php?rm=box_download_shared_file&shared_name=${SHARED_NAME}&file_id=f_${fileId}`;
+        console.log(`  Trying download with file ID...`);
+        const dlRes = await fetch(dlUrl, {
+          redirect: "follow",
+          headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" },
+        });
+        if (dlRes.ok) {
+          const text = await dlRes.text();
+          console.log(`  Download got ${text.length} bytes`);
+          if (looksLikeCSV(text)) return text;
+        }
+      }
+
+      // Also try the Box API with shared link header
+      console.log("  Trying Box API shared_items...");
+      const apiRes = await fetch("https://api.box.com/2.0/shared_items", {
+        headers: {
+          "BoxApi": `shared_link=https://ucla.app.box.com/s/${SHARED_NAME}`,
+        },
+      });
+      console.log(`  API status: ${apiRes.status}`);
+      if (apiRes.ok) {
+        const data = await apiRes.json();
+        console.log(`  API response type: ${data.type}, id: ${data.id}, name: ${data.name || "?"}`);
+
+        if (data.type === "file" && data.id) {
+          const dlUrl = `https://ucla.app.box.com/index.php?rm=box_download_shared_file&shared_name=${SHARED_NAME}&file_id=f_${data.id}`;
+          const dlRes = await fetch(dlUrl, {
+            redirect: "follow",
+            headers: { "User-Agent": "Mozilla/5.0" },
+          });
+          if (dlRes.ok) {
+            const text = await dlRes.text();
+            if (looksLikeCSV(text)) return text;
+          }
+        }
+
+        // If folder, find CSV inside
+        if (data.type === "folder") {
+          const entries = data.item_collection?.entries || [];
+          console.log(`  Folder has ${entries.length} items: ${entries.map(e => e.name).join(", ")}`);
+          for (const item of entries) {
+            if (item.type === "file") {
+              console.log(`  Trying file: ${item.name} (${item.id})`);
+              const dlRes = await fetch(
+                `https://ucla.app.box.com/index.php?rm=box_download_shared_file&shared_name=${SHARED_NAME}&file_id=f_${item.id}`,
+                { redirect: "follow", headers: { "User-Agent": "Mozilla/5.0" } }
+              );
+              if (dlRes.ok) {
+                const text = await dlRes.text();
+                if (looksLikeCSV(text)) {
+                  console.log(`  Success! Got CSV from ${item.name}`);
+                  return text;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.log(`  HTML scrape error: ${e.message}`);
+  }
+
+  throw new Error(
+    "Could not fetch CSV from Box. All strategies failed. " +
+    "Check the Action logs above for details on what each strategy returned."
+  );
 }
 
 function parseLastUpdated(raw) {
@@ -57,7 +163,6 @@ function parseLastUpdated(raw) {
   const dd = String(parseInt(day)).padStart(2, "0");
   const hh = String(h).padStart(2, "0");
   const mi = String(parseInt(minute)).padStart(2, "0");
-  // 2026 DST starts March 8 — before that is PST (UTC-8), after is PDT (UTC-7)
   const m = parseInt(month);
   const d = parseInt(day);
   const isPDT = m > 3 || (m === 3 && d >= 8);
@@ -70,6 +175,7 @@ function parseCSV(text) {
   if (lines.length < 2) return { rows: [], lastUpdated: null };
 
   const headers = lines[0].split(",").map((h) => h.trim().toLowerCase().replace(/"/g, ""));
+  console.log(`CSV headers: ${headers.join(", ")}`);
 
   const findCol = (keywords) => {
     for (const kw of keywords) {
@@ -84,6 +190,8 @@ function parseCSV(text) {
   const genderIdx = findCol(["gender", "sex", "assignment"]);
   const bedIdx = findCol(["bed", "spaces", "available", "count"]);
   const updatedIdx = findCol(["last updated", "lastupdated", "updated"]);
+
+  console.log(`Column indices: building=${buildingIdx} roomType=${roomTypeIdx} gender=${genderIdx} bed=${bedIdx} updated=${updatedIdx}`);
 
   if (buildingIdx === -1 || bedIdx === -1) return { rows: [], lastUpdated: null };
 
@@ -121,6 +229,7 @@ function parseCSV(text) {
 
 async function main() {
   console.log("Fetching CSV from UCLA Housing Box...");
+  console.log(`Shared name: ${SHARED_NAME}`);
 
   let csvText;
   try {
@@ -130,7 +239,7 @@ async function main() {
     process.exit(1);
   }
 
-  console.log(`Fetched ${csvText.length} bytes`);
+  console.log(`Fetched ${csvText.length} bytes of CSV`);
 
   const { rows, lastUpdated: csvTimestamp } = parseCSV(csvText);
   if (rows.length === 0) {
@@ -140,7 +249,6 @@ async function main() {
 
   console.log(`Parsed ${rows.length} rows, Last Updated: ${csvTimestamp || "not found"}`);
 
-  // Load existing data
   const dataDir = join(__dirname, "..", "data");
   if (!existsSync(dataDir)) mkdirSync(dataDir, { recursive: true });
 
@@ -153,13 +261,11 @@ async function main() {
 
   const snapshotTime = csvTimestamp || new Date().toISOString();
 
-  // Check if we already have a snapshot with this exact timestamp (avoid duplicates)
   if (existing.snapshots.some((s) => s.timestamp === snapshotTime)) {
     console.log(`Snapshot for ${snapshotTime} already exists. Skipping.`);
     process.exit(0);
   }
 
-  // Append new snapshot
   existing.snapshots.push({ timestamp: snapshotTime, rows });
   existing.lastUpdated = snapshotTime;
 
